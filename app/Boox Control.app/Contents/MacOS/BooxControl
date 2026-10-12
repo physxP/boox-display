@@ -1,0 +1,5 @@
+#!/bin/zsh
+# scrcpy wrapped as an app, so macOS gives its window focus when it's opened (see boox-control).
+export ADB=$HOME/Library/Android/sdk/platform-tools/adb
+exec /opt/homebrew/bin/scrcpy --no-video --no-audio --keyboard=uhid --mouse=uhid --shortcut-mod=rsuper \
+  --window-title="Boox control (right ⌘ to stop)" >>$HOME/.local/state/boox-display/control.log 2>&1

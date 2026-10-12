@@ -1,0 +1,15 @@
+#!/bin/zsh
+# Automatic switching to Boox screen mode when the Boox is plugged in.
+#   boox-auto off   plugging in only charges / exposes files (leaves Boox screen mode now)
+#   boox-auto on    plugging in switches to Boox screen mode (also now, if plugged in)
+#   boox-auto       show the current setting
+source ${0:A:h}/lib.sh
+case $1 in
+  off) touch $STATE/auto-off
+       boox_mode_active && $BIN/boox-laptop >/dev/null
+       echo "Auto-switch off." ;;
+  on)  rm -f $STATE/auto-off
+       boox_connected && ! controlling && $BIN/boox-screen >/dev/null
+       echo "Auto-switch on." ;;
+  *)   [[ -e $STATE/auto-off ]] && echo "Auto-switch is off." || echo "Auto-switch is on." ;;
+esac

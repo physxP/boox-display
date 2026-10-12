@@ -1,0 +1,29 @@
+#!/bin/zsh
+# Runs at login (LaunchAgent): plug in the Boox -> Boox screen mode, unplug -> laptop mode.
+# Paused while auto-switch is off or control mode is running.
+source ${0:A:h}/lib.sh
+LOG=$STATE/watch.log
+was=unknown
+while true; do
+  sleep 3
+  pgrep -xq BetterDisplay || continue  # after login, wait for BetterDisplay
+  if [[ -e $STATE/auto-off || -e $STATE/control-active ]]; then was=paused; continue; fi
+  (( $(stat -f %z $LOG 2>/dev/null || echo 0) > 1000000 )) && mv $LOG $LOG.old
+  if boox_connected; then
+    if [[ $was == paused ]]; then
+      was=yes  # just resumed: adopt the current state without switching
+    elif [[ $was != yes ]]; then
+      print -- "$(date '+%F %T') plugged in" >>$LOG
+      $BIN/boox-screen >>$LOG 2>&1
+      was=yes
+    elif boox_mode_active && ! $ADB reverse --list 2>/dev/null | grep -q "tcp:$VNC_PORT"; then
+      $ADB reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null 2>&1  # adb restarted; restore forward
+    fi
+  else
+    if [[ $was == yes ]]; then
+      print -- "$(date '+%F %T') unplugged" >>$LOG
+      $BIN/boox-laptop >>$LOG 2>&1
+    fi
+    was=no
+  fi
+done

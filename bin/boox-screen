@@ -1,0 +1,29 @@
+#!/bin/zsh
+# Boox screen mode: the Mac desktop (1600x1200 HiDPI, mirrored to the laptop) is shown on
+# the Boox through VNC over USB, and the laptop backlight goes off.
+source ${0:A:h}/lib.sh
+boox_connected || { echo "Boox not connected."; exit 1; }
+stop_control
+
+BOOX=$(boox_tag) LAPTOP=$(laptop_tag)
+[[ $(betterdisplaycli get --tagID=$BOOX --connected) == on ]] || betterdisplaycli set --tagID=$BOOX --connected=on
+# A freshly connected virtual screen takes a moment to accept settings; wait for it.
+for i in {1..30}; do
+  MODE=$(betterdisplaycli get --tagID=$BOOX --displayModeList 2>/dev/null |
+         awk -v r=$BOOX_RES '$3 == r && $4 == "HiDPI" { print $1; exit }')
+  [[ -n $MODE ]] && break; sleep 0.5
+done
+[[ -n $MODE ]] || { echo "The $VIRTUAL_NAME display didn't come up."; exit 1; }
+betterdisplaycli set --tagID=$BOOX --displayModeNumber=$MODE
+betterdisplaycli set --tagID=$BOOX --main=on
+betterdisplaycli set --tagID=$BOOX --mirror=on --targetTagID=$LAPTOP >/dev/null
+
+save_laptop_brightness
+betterdisplaycli set --tagID=$LAPTOP --softwareBrightness=1
+betterdisplaycli set --tagID=$LAPTOP --hardwareBrightness=0
+$BIN/editor-zoom on
+
+wake_boox
+$ADB reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null
+start_avnc
+echo "Boox screen mode. Brightness keys bring the laptop back (same desktop); boox-laptop to undo."

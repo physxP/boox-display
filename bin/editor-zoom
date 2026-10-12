@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Zoom VS Code-style editors in Boox screen mode, and put back whatever was there before.
+
+    editor-zoom on    set window.zoomLevel to 1 (120%), remembering the previous value
+    editor-zoom off   restore the previous value
+Editors pick up settings.json changes live.
+"""
+import json, os, sys
+
+LEVEL = 1
+APPS = ("Code", "Antigravity")
+SAVED = os.path.expanduser("~/.local/state/boox-display/editor-zoom.json")
+MISSING = "__missing__"
+
+def settings_path(app):
+    return os.path.expanduser(f"~/Library/Application Support/{app}/User/settings.json")
+
+def load(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None  # missing, or JSON with comments that we won't risk rewriting
+
+def save(path, data):
+    with open(path, "w") as f:
+        json.dump(data, f, indent=4)
+        f.write("\n")
+
+saved = load(SAVED) or {}
+for app in APPS:
+    path = settings_path(app)
+    s = load(path)
+    if s is None:
+        continue
+    if sys.argv[1:] == ["on"]:
+        if app not in saved:  # don't overwrite the original if already zoomed
+            saved[app] = s.get("window.zoomLevel", MISSING)
+        s["window.zoomLevel"] = LEVEL
+    else:
+        if app not in saved:
+            continue
+        prev = saved.pop(app)
+        if prev == MISSING:
+            s.pop("window.zoomLevel", None)
+        else:
+            s["window.zoomLevel"] = prev
+    save(path, s)
+
+os.makedirs(os.path.dirname(SAVED), exist_ok=True)
+save(SAVED, saved)

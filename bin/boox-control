@@ -1,0 +1,39 @@
+#!/bin/zsh
+# Control mode: the Mac's keyboard and trackpad drive the Boox directly (scrcpy registers
+# them on the Boox as a real USB keyboard and mouse; no screen is streamed). Laptop goes dark.
+# Right ⌘, closing the window, or unplugging ends it and returns to the previous mode.
+source ${0:A:h}/lib.sh
+boox_connected || { echo "Boox not connected."; exit 1; }
+controlling && { echo "Already in control mode."; exit 0; }
+
+touch $STATE/control-active  # pauses the plug-in watcher
+trap 'rm -f $STATE/control-active' EXIT
+
+if boox_mode_active; then prev=screen; $BIN/boox-laptop >/dev/null; else prev=laptop; fi
+boox_connected && stop_avnc  # land on the Boox's own screen
+
+save_laptop_brightness
+betterdisplaycli set --tagID=$(laptop_tag) --hardwareBrightness=0
+wake_boox
+
+# Launched as an app via `open` so macOS gives its window keyboard and mouse focus.
+open -n "$HOME/Applications/Boox Control.app"
+for i in {1..40}; do controlling && break; sleep 0.25; done
+sleep 2  # let scrcpy grab the mouse (it moves the pointer once when it does)
+
+# While scrcpy holds the mouse the Mac pointer is frozen. Right ⌘ releases it, so the
+# pointer moving again means "leave control mode".
+$BIN/../build/mousewatch & MW=$!
+while controlling; do
+  kill -0 $MW 2>/dev/null || { pkill -9 -x scrcpy; break; }
+  sleep 0.3
+done
+kill $MW 2>/dev/null
+
+rm -f $STATE/control-active
+[[ -e $STATE/switching ]] && exit 0  # another mode is taking over; leave it alone
+if [[ $prev == screen ]] && boox_connected; then
+  $BIN/boox-screen >/dev/null
+else
+  restore_laptop_brightness
+fi

@@ -1,0 +1,15 @@
+#!/bin/zsh
+# Laptop mode: laptop screen only, at its own resolution and brightness; VNC session ended.
+source ${0:A:h}/lib.sh
+stop_control
+
+BOOX=$(boox_tag) LAPTOP=$(laptop_tag)
+restore_laptop_brightness
+if boox_mode_active; then
+  betterdisplaycli set --tagID=$BOOX --mirror=off --targetTagID=$LAPTOP >/dev/null 2>&1
+  betterdisplaycli set --tagID=$LAPTOP --main=on >/dev/null 2>&1
+  betterdisplaycli set --tagID=$BOOX --connected=off
+fi
+$BIN/editor-zoom off
+boox_connected && stop_avnc
+echo "Laptop mode."
