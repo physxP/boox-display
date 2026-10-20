@@ -1,29 +1,54 @@
 #!/bin/zsh
-# Runs at login (LaunchAgent): plug in the Boox -> Boox screen mode, unplug -> laptop mode.
-# Paused while auto-switch is off or control mode is running.
+# Runs at login (LaunchAgent).
+# - USB: plug in -> Boox screen mode (unless auto-switch is off); unplug -> laptop mode.
+#   Every plug-in also re-enables wireless debugging on the Boox.
+# - Wi-Fi: keeps adb connected to the Boox while it's on the network (so the menu can offer
+#   Wi-Fi modes), and ends a Wi-Fi screen session if the link or the VNC session drops.
 source ${0:A:h}/lib.sh
 LOG=$STATE/watch.log
-was=unknown
+log() { print -- "$(date '+%F %T') $*" >>$LOG }
+usb=unknown misses=0 last_discover=-100 discover_pid=0
+
 while true; do
   sleep 3
   pgrep -xq BetterDisplay || continue  # after login, wait for BetterDisplay
-  if [[ -e $STATE/auto-off || -e $STATE/control-active ]]; then was=paused; continue; fi
+  mac_locked && continue                # displays can't be changed while locked; act after unlock
   (( $(stat -f %z $LOG 2>/dev/null || echo 0) > 1000000 )) && mv $LOG $LOG.old
-  if boox_connected; then
-    if [[ $was == paused ]]; then
-      was=yes  # just resumed: adopt the current state without switching
-    elif [[ $was != yes ]]; then
-      print -- "$(date '+%F %T') plugged in" >>$LOG
-      $BIN/boox-screen >>$LOG 2>&1
-      was=yes
-    elif boox_mode_active && ! $ADB reverse --list 2>/dev/null | grep -q "tcp:$VNC_PORT"; then
-      $ADB reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null 2>&1  # adb restarted; restore forward
+
+  # Wi-Fi link: rediscover every 15s if not connected (in the background, so a slow
+  # attempt never delays USB handling); drop dead links.
+  if (( SECONDS - last_discover >= 15 )) && ! kill -0 $discover_pid 2>/dev/null; then
+    last_discover=$SECONDS
+    for s in $($ADB devices 2>/dev/null | awk '$2 == "offline" { print $1 }'); do $ADB disconnect $s >/dev/null 2>&1; done
+    wifi_discover & discover_pid=$!
+  fi
+
+  # A Wi-Fi screen session ends when the link drops or AVNC disconnects (~15s grace).
+  if [[ $(mode) == screen-wifi && ! -e $STATE/control-active ]]; then
+    if wifi_connected && vnc_client_connected; then misses=0; else (( misses++ )); fi
+    if (( misses >= 5 )); then
+      log "Wi-Fi session ended"; $BIN/boox-laptop >>$LOG 2>&1; misses=0
     fi
   else
-    if [[ $was == yes ]]; then
-      print -- "$(date '+%F %T') unplugged" >>$LOG
-      $BIN/boox-laptop >>$LOG 2>&1
+    misses=0
+  fi
+
+  # USB plug / unplug.
+  if usb_connected; then
+    if [[ $usb != yes ]]; then
+      usb=yes
+      log "plugged in"; usb_housekeeping
+      if [[ ! -e $STATE/auto-off && ! -e $STATE/control-active ]]; then
+        $BIN/boox-screen >>$LOG 2>&1
+      fi
+    elif [[ $(mode) == screen-usb ]] && ! vnc_forward_on usb; then
+      ANDROID_SERIAL=$(usb_serial) $ADB reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null 2>&1  # adb restarted
     fi
-    was=no
+  else
+    if [[ $usb == yes ]]; then
+      log "unplugged"
+      [[ $(mode) == (screen-usb|control-usb) ]] && $BIN/boox-laptop >>$LOG 2>&1
+    fi
+    usb=no
   fi
 done

@@ -1,22 +1,29 @@
 #!/bin/zsh
 # Control mode: the Mac's keyboard and trackpad drive the Boox directly (scrcpy registers
-# them on the Boox as a real USB keyboard and mouse; no screen is streamed). Laptop goes dark.
-# Right ⌘, closing the window, or unplugging ends it and returns to the previous mode.
+# them on the Boox as a real keyboard and mouse; no screen is streamed). Over USB, or Wi-Fi
+# with --wifi. Laptop goes dark. Right ⌘, closing the window, or losing the connection ends
+# it and returns to the previous mode.
 source ${0:A:h}/lib.sh
-boox_connected || { echo "Boox not connected."; exit 1; }
+link=usb; [[ $1 == --wifi ]] && link=wifi
+use_link $link || { echo "Boox not connected over ${link:u}."; exit 1; }
 controlling && { echo "Already in control mode."; exit 0; }
 
 touch $STATE/control-active  # pauses the plug-in watcher
 trap 'rm -f $STATE/control-active' EXIT
 
-if boox_mode_active; then prev=screen; $BIN/boox-laptop >/dev/null; else prev=laptop; fi
-boox_connected && stop_avnc  # land on the Boox's own screen
+prev=$(mode)
+[[ $prev == screen-* ]] && $BIN/boox-laptop >/dev/null
+use_link $link || exit 1
+stop_avnc  # land on the Boox's own screen
 
 save_laptop_brightness
 betterdisplaycli set --tagID=$(laptop_tag) --hardwareBrightness=0
 wake_boox
+set_mode control-$link
 
-# Launched as an app via `open` so macOS gives its window keyboard and mouse focus.
+# Launched as an app via `open` so macOS gives its window keyboard and mouse focus; the
+# app reads which connection to use from $STATE.
+echo $ANDROID_SERIAL > $STATE/control-serial
 open -n "$HOME/Applications/Boox Control.app"
 for i in {1..40}; do controlling && break; sleep 0.25; done
 sleep 2  # let scrcpy grab the mouse (it moves the pointer once when it does)
@@ -32,8 +39,9 @@ kill $MW 2>/dev/null
 
 rm -f $STATE/control-active
 [[ -e $STATE/switching ]] && exit 0  # another mode is taking over; leave it alone
-if [[ $prev == screen ]] && boox_connected; then
-  $BIN/boox-screen >/dev/null
-else
-  restore_laptop_brightness
-fi
+case $prev in
+  screen-usb)  usb_connected  && exec $BIN/boox-screen >/dev/null ;;
+  screen-wifi) wifi_connected && exec $BIN/boox-screen --wifi >/dev/null ;;
+esac
+restore_laptop_brightness
+set_mode laptop

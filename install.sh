@@ -13,7 +13,7 @@ done
 
 echo "Building helpers..."
 mkdir -p build
-for s in vnccursor mousewatch booxmenu; do swiftc -O src/$s.swift -o build/$s; done
+for s in vnccursor mousewatch booxmenu findboox; do swiftc -O src/$s.swift -o build/$s; done
 
 source bin/lib.sh
 if [[ -z $(boox_tag) ]]; then
@@ -33,6 +33,7 @@ for p in launchd/*.plist; do
   label=${p:t:r} dest=$HOME/Library/LaunchAgents/${p:t}
   sed "s|__ROOT__|$ROOT|g" $p > $dest
   launchctl bootout gui/$UID/$label 2>/dev/null || true
+  for i in {1..20}; do launchctl print gui/$UID/$label >/dev/null 2>&1 || break; sleep 0.25; done  # bootout is async
   launchctl bootstrap gui/$UID $dest
 done
 echo "Done."

@@ -1,8 +1,11 @@
 #!/bin/zsh
 # Boox screen mode: the Mac desktop (1600x1200 HiDPI, mirrored to the laptop) is shown on
-# the Boox through VNC over USB, and the laptop backlight goes off.
+# the Boox through VNC, tunnelled over adb (USB, or Wi-Fi with --wifi), and the laptop
+# backlight goes off.
 source ${0:A:h}/lib.sh
-boox_connected || { echo "Boox not connected."; exit 1; }
+wait_unlocked
+link=usb; [[ $1 == --wifi ]] && link=wifi
+use_link $link || { echo "Boox not connected over ${link:u}."; exit 1; }
 stop_control
 
 BOOX=$(boox_tag) LAPTOP=$(laptop_tag)
@@ -23,7 +26,11 @@ betterdisplaycli set --tagID=$LAPTOP --softwareBrightness=1
 betterdisplaycli set --tagID=$LAPTOP --hardwareBrightness=0
 $BIN/editor-zoom on
 
+# The Boox has one VNC port forward, carried by whichever link created it; recreate it on
+# this link.
 wake_boox
+$ADB reverse --remove tcp:$VNC_PORT >/dev/null 2>&1
 $ADB reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null
 start_avnc
-echo "Boox screen mode. Brightness keys bring the laptop back (same desktop); boox-laptop to undo."
+set_mode screen-$link
+echo "Boox screen mode (${link:u}). Brightness keys bring the laptop back (same desktop); boox-laptop to undo."
