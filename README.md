@@ -48,8 +48,8 @@ Both modes also work over Android wireless debugging, with no cable:
 
 State lives in `~/.local/state/boox-display`: current `mode`, the `auto-off` flag, the Boox's
 `boox-serial` and last `boox-wifi` address, `control-serial` and `control-active` for control
-mode, `laptop-brightness`, `editor-zoom.json`, and the watcher's `watch.log`. It is
-machine-local and never committed.
+mode, `switching` (set while another mode stops control mode), `laptop-brightness`,
+`editor-zoom.json`, and the watcher's `watch.log`. It is machine-local and never committed.
 
 ## Setup
 

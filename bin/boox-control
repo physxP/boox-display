@@ -7,6 +7,7 @@ source ${0:A:h}/lib.sh
 link=usb; [[ $1 == --wifi ]] && link=wifi
 use_link $link || { echo "Boox not connected over ${link:u}."; exit 1; }
 controlling && { echo "Already in control mode."; exit 0; }
+rm -f $STATE/switching  # stale if a switch was interrupted; none can be running now
 
 touch $STATE/control-active  # pauses the plug-in watcher
 trap 'rm -f $STATE/control-active' EXIT
