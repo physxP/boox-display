@@ -1,6 +1,11 @@
 # Shared settings and helpers for the boox-display scripts. Sourced, not run.
-export PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-export ADB=${ADB:-$HOME/Library/Android/sdk/platform-tools/adb}  # scrcpy reads $ADB too
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"  # Apple Silicon + Intel brew
+# adb: $ADB if set, else the Android SDK's, else one on PATH (brew android-platform-tools). scrcpy reads $ADB too.
+if [[ -z ${ADB:-} ]]; then
+  ADB=$HOME/Library/Android/sdk/platform-tools/adb
+  [[ -x $ADB ]] || ADB=${commands[adb]:-adb}
+fi
+export ADB
 
 BIN=${${(%):-%x}:A:h}
 STATE=$HOME/.local/state/boox-display

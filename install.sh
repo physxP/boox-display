@@ -4,12 +4,15 @@
 set -e
 ROOT=${0:A:h}
 cd $ROOT
-export PATH="/opt/homebrew/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+BIN_DIR=${BIN_DIR:-$(brew --prefix 2>/dev/null)/bin}   # /opt/homebrew/bin or /usr/local/bin
+[[ -d $BIN_DIR && -w $BIN_DIR ]] || { BIN_DIR=$HOME/.local/bin; mkdir -p $BIN_DIR; }
 
 for c in betterdisplaycli scrcpy swiftc; do
   command -v $c >/dev/null || { echo "Missing $c. Needs: brew install --cask betterdisplay; brew install scrcpy; Xcode command line tools."; exit 1; }
 done
-[[ -x $HOME/Library/Android/sdk/platform-tools/adb ]] || echo "Warning: adb not found at ~/Library/Android/sdk/platform-tools/adb (set ADB to override)."
+[[ -x $HOME/Library/Android/sdk/platform-tools/adb ]] || (( $+commands[adb] )) || [[ -n ${ADB:-} ]] ||
+  echo "Warning: adb not found (Android SDK, brew install --cask android-platform-tools, or set ADB)."
 
 echo "Building helpers..."
 mkdir -p build
@@ -26,7 +29,8 @@ echo "Installing Boox Control.app and commands..."
 rm -rf "$HOME/Applications/Boox Control.app"
 mkdir -p $HOME/Applications
 cp -R "app/Boox Control.app" $HOME/Applications/
-for c in boox-screen boox-laptop boox-control boox-auto; do ln -sf $ROOT/bin/$c /opt/homebrew/bin/$c; done
+for c in boox-screen boox-laptop boox-control boox-auto; do ln -sf $ROOT/bin/$c $BIN_DIR/$c; done
+echo "Commands linked into $BIN_DIR."
 
 echo "Installing login items..."
 for p in launchd/*.plist; do

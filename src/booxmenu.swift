@@ -5,7 +5,16 @@ import Cocoa
 let home = FileManager.default.homeDirectoryForCurrentUser.path
 let bin = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : home + "/projects/personal/boox-display/bin"
 let state = home + "/.local/state/boox-display"
-let adb = home + "/Library/Android/sdk/platform-tools/adb"
+// adb: $ADB, else the Android SDK's, else Homebrew's (Apple Silicon or Intel).
+let adb: String = {
+    let fm = FileManager.default
+    if let env = ProcessInfo.processInfo.environment["ADB"], !env.isEmpty { return env }
+    for p in [home + "/Library/Android/sdk/platform-tools/adb", "/opt/homebrew/bin/adb", "/usr/local/bin/adb"]
+        where fm.isExecutableFile(atPath: p) { return p }
+    return home + "/Library/Android/sdk/platform-tools/adb"
+}()
+// adb model name of the Boox (same as BOOX_MODEL in bin/lib.sh).
+let model = ProcessInfo.processInfo.environment["BOOX_MODEL"] ?? "NoteMax"
 
 @discardableResult
 func run(_ path: String, _ args: [String] = [], wait: Bool = false) -> (status: Int32, output: String) {
@@ -48,7 +57,7 @@ final class Menu: NSObject, NSMenuDelegate {
 
     func refresh() {
         let devices = run(adb, ["devices", "-l"], wait: true).output.split(separator: "\n")
-        let boox = devices.filter { $0.contains("model:NoteMax") && $0.split(separator: " ").dropFirst().first == "device" }
+        let boox = devices.filter { $0.contains("model:" + model) && $0.split(separator: " ").dropFirst().first == "device" }
         let usb = boox.contains { $0.contains(" usb:") }
         let wifi = boox.contains { $0.first?.isNumber == true }
         let controlling = run("/usr/bin/pgrep", ["-xq", "scrcpy"], wait: true).status == 0

@@ -1,7 +1,13 @@
 #!/bin/zsh
 # scrcpy wrapped as an app, so macOS gives its window focus when it's opened (see boox-control).
 STATE=$HOME/.local/state/boox-display
-export ADB=$HOME/Library/Android/sdk/platform-tools/adb
-export ANDROID_SERIAL=$(cat $STATE/control-serial)
-exec /opt/homebrew/bin/scrcpy --no-video --no-audio --keyboard=uhid --mouse=uhid --shortcut-mod=rsuper \
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"   # opened from Finder: no shell PATH
+if [[ -z ${ADB:-} ]]; then
+  ADB=$HOME/Library/Android/sdk/platform-tools/adb
+  [[ -x $ADB ]] || ADB=${commands[adb]:-adb}
+fi
+export ADB
+# boox-control writes which connection to use; without it scrcpy picks the only device.
+[[ -r $STATE/control-serial ]] && export ANDROID_SERIAL=$(<$STATE/control-serial)
+exec scrcpy --no-video --no-audio --keyboard=uhid --mouse=uhid --shortcut-mod=rsuper \
   --window-title="Boox control (right ⌘ to stop)" >>$STATE/control.log 2>&1
