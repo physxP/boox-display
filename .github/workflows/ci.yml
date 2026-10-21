@@ -1,0 +1,25 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scripts:
+    runs-on: ubuntu-24.04   # syntax only; the tool itself is macOS-only
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: zsh syntax
+        run: |
+          sudo apt-get install -y -qq zsh >/dev/null
+          for f in bin/* install.sh uninstall.sh "app/Boox Control.app/Contents/MacOS/BooxControl"; do
+            if head -1 "$f" | grep -q zsh; then zsh -n "$f" && echo "ok $f"; fi
+          done
+      - name: python syntax
+        run: |
+          for f in bin/*; do if head -1 "$f" | grep -q python; then python3 -m py_compile "$f" && echo "ok $f"; fi; done
