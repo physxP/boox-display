@@ -46,8 +46,9 @@ Both modes also work over Android wireless debugging, with no cable:
 - **Links:** USB and Wi-Fi can both be connected; every adb/scrcpy call targets one through
   `ANDROID_SERIAL`.
 
-State lives in `~/.local/state/boox-display`: current `mode`, the Boox's `boox-serial` and
-last `boox-wifi` address, `control-serial`, saved brightness, editor zoom, and logs. It is
+State lives in `~/.local/state/boox-display`: current `mode`, the `auto-off` flag, the Boox's
+`boox-serial` and last `boox-wifi` address, `control-serial` and `control-active` for control
+mode, `laptop-brightness`, `editor-zoom.json`, and the watcher's `watch.log`. It is
 machine-local and never committed.
 
 ## Setup
