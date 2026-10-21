@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-24.04   # syntax only; the tool itself is macOS-only
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: zsh syntax
         run: |
           sudo apt-get install -y -qq zsh >/dev/null
