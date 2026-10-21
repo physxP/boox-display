@@ -3,6 +3,10 @@
 Use an Onyx Boox Note Max (13.3", 3200×2400 e-ink) as the Mac's screen over USB or Wi-Fi, or
 drive the Boox itself with the Mac's keyboard and trackpad.
 
+Built for one setup and shared as-is: a **Boox Note Max** and an **Apple Silicon MacBook**
+(see [Assumptions](#assumptions) for what to change otherwise). Read
+[Security and side effects](#security-and-side-effects) before installing.
+
 ## Modes
 
 | Mode | Command | What happens |
@@ -54,17 +58,52 @@ machine-local and never committed.
 ## Setup
 
 1. `brew install --cask betterdisplay` and `brew install scrcpy`; Android platform-tools at
-   `~/Library/Android/sdk/platform-tools/adb` (or set `ADB=/path/to/adb`). Xcode Command Line
-   Tools for `swiftc` (`xcode-select --install`).
-2. System Settings → General → Sharing → **Screen Sharing** on.
+   `~/Library/Android/sdk/platform-tools/adb` (Android Studio's default). The login items, the
+   menu and `Boox Control.app` only look there; `ADB=/path/to/adb` works only for commands you
+   run from a shell. Xcode Command Line Tools for `swiftc` (`xcode-select --install`).
+2. System Settings → General → Sharing → **Screen Sharing** on, limited to your own account
+   (see the security notes below).
 3. Boox: enable USB debugging, install [AVNC], add a server `localhost:5900` with
-   *Auto-connect when app starts* and image quality at max, and log in once with *Remember*.
+   *Auto-connect when app starts* and image quality at max, and log in once with *Remember*
+   (this stores your Mac login password in AVNC on the tablet).
 4. `./install.sh` (builds the Swift helpers into `build/`, installs `~/Applications/Boox Control.app`,
    links the commands into `/opt/homebrew/bin`, and loads the three LaunchAgents rendered from
    `launchd/`). `./uninstall.sh` reverses it; BetterDisplay, the virtual screen and the state
    directory are left alone.
 
-Apple Silicon Homebrew (`/opt/homebrew`) is assumed.
+Keep the clone where it is: the login items run from it (and restart if they exit), so run
+`./uninstall.sh` before moving or deleting it.
+
+## Assumptions
+
+- **Boox Note Max:** the tablet is recognised by its adb model name `NoteMax`, and the screen
+  size (1600×1200 HiDPI) and virtual screen name are set for it (`BOOX_MODEL`, `BOOX_RES`,
+  `VIRTUAL_NAME` in `bin/lib.sh`, plus `src/booxmenu.swift` and `src/vnccursor.swift`). On
+  another Boox nothing happens until you edit those.
+- **MacBook:** brightness handling expects a display called "Built-in Display".
+- **Apple Silicon Homebrew** (`/opt/homebrew`); on an Intel Mac `install.sh` stops partway.
+- BetterDisplay must be running for any mode switch.
+
+## Security and side effects
+
+- **Screen Sharing (VNC, port 5900) listens on every network the Mac joins**, not only the
+  tablet's adb tunnel. Allow only your own account, don't enable "VNC viewers may control
+  screen with password", keep the macOS firewall on, and turn Screen Sharing off when you stop
+  using this (`uninstall.sh` leaves it on).
+- **Wireless debugging on the Boox is switched on at every USB plug-in and never switched off**,
+  and `stay_on_while_plugged_in` is set. While it is on, the tablet advertises itself (with its
+  serial number) on the local network and accepts adb from computers it has trusted. To stop:
+  `adb shell settings put global adb_wifi_enabled 0`, and uninstall, since the next plug-in turns
+  it back on.
+- **Background work:** the watcher checks every 3 s and keeps an adb server running; every 15 s
+  it disconnects offline adb devices, which can include your other phones or emulators.
+- **Other scrcpy windows:** any process named `scrcpy` counts as control mode and is killed
+  (`kill -9`) on mode switches, including scrcpy sessions for other devices.
+- **Editor settings:** Boox screen mode sets `window.zoomLevel` in VS Code's and Antigravity's
+  `settings.json` and restores it in laptop mode. The file is rewritten (reformatted), files with
+  comments are skipped, and Settings Sync may carry the zoom to your other machines.
+- `install.sh` puts the four commands into `/opt/homebrew/bin`, replacing anything with the same
+  names; `uninstall.sh` removes those names.
 
 ## Boox and Mac tips
 
@@ -88,5 +127,9 @@ Apple Silicon Homebrew (`/opt/homebrew`) is assumed.
   recreated on the chosen link at every mode switch.
 - With both USB and Wi-Fi connected, adb needs `ANDROID_SERIAL` or it refuses to pick one.
 - Deskreen and similar browser-based mirrors were tried and dropped as flaky; VNC is pixel-exact.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
 
 [AVNC]: https://github.com/gujjwal00/avnc
