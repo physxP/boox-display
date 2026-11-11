@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Laptop mode: laptop screen only, at its own resolution and brightness; VNC session ended.
+# Laptop mode: the color screens only (the one that was main before is main again), the laptop
+# at its own resolution and brightness; VNC session ended.
 source ${0:A:h}/lib.sh
 wait_unlocked
 stop_control
@@ -9,13 +10,15 @@ BOOX=$(boox_tag) LAPTOP=$(laptop_tag)
 restore_laptop_brightness
 if boox_mode_active; then
   betterdisplaycli set --tagID=$BOOX --mirror=off --targetTagID=$LAPTOP >/dev/null 2>&1
-  betterdisplaycli set --tagID=$LAPTOP --main=on >/dev/null 2>&1
+  betterdisplaycli set --tagID=$(color_main) --main=on >/dev/null 2>&1
   betterdisplaycli set --tagID=$BOOX --connected=off
 fi
 $BIN/editor-zoom off
+stop_booxvnc
 if use_link usb || use_link wifi; then
   stop_avnc
   $ADB reverse --remove tcp:$VNC_PORT >/dev/null 2>&1
+  $ADB reverse --remove tcp:$BOOXVNC_PORT >/dev/null 2>&1
 fi
 set_mode laptop
 echo "Laptop mode."

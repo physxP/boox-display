@@ -6,14 +6,20 @@ ROOT=${0:A:h}
 cd $ROOT
 export PATH="/opt/homebrew/bin:$PATH"
 
+NEEDS="Needs: brew install --cask betterdisplay; brew install scrcpy libvncserver; Xcode command line tools."
 for c in betterdisplaycli scrcpy swiftc; do
-  command -v $c >/dev/null || { echo "Missing $c. Needs: brew install --cask betterdisplay; brew install scrcpy; Xcode command line tools."; exit 1; }
+  command -v $c >/dev/null || { echo "Missing $c. $NEEDS"; exit 1; }
 done
+[[ -f /opt/homebrew/include/rfb/rfb.h ]] || { echo "Missing libvncserver. $NEEDS"; exit 1; }
 [[ -x $HOME/Library/Android/sdk/platform-tools/adb ]] || echo "Warning: adb not found at ~/Library/Android/sdk/platform-tools/adb (set ADB to override)."
 
 echo "Building helpers..."
 mkdir -p build
+# Remove before rebuilding: macOS kills a binary rewritten in place while it was running.
+rm -f build/{vnccursor,mousewatch,booxmenu,findboox,booxvnc}
 for s in vnccursor mousewatch booxmenu findboox; do swiftc -O src/$s.swift -o build/$s; done
+swiftc -O -import-objc-header src/booxvnc.h -I/opt/homebrew/include -L/opt/homebrew/lib -lvncserver \
+  src/booxvnc.swift -o build/booxvnc
 
 source bin/lib.sh
 if [[ -z $(boox_tag) ]]; then
@@ -31,7 +37,7 @@ for c in boox-screen boox-laptop boox-control boox-auto; do ln -sf $ROOT/bin/$c 
 echo "Installing login items..."
 for p in launchd/*.plist; do
   label=${p:t:r} dest=$HOME/Library/LaunchAgents/${p:t}
-  sed "s|__ROOT__|$ROOT|g" $p > $dest
+  sed -e "s|__ROOT__|$ROOT|g" -e "s|__HOME__|$HOME|g" $p > $dest
   launchctl bootout gui/$UID/$label 2>/dev/null || true
   for i in {1..20}; do launchctl print gui/$UID/$label >/dev/null 2>&1 || break; sleep 0.25; done  # bootout is async
   launchctl bootstrap gui/$UID $dest

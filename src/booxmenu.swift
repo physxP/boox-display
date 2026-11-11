@@ -29,6 +29,9 @@ final class Menu: NSObject, NSMenuDelegate {
     let screenUSB = NSMenuItem(title: "Use Boox as screen", action: #selector(screenUSBMode), keyEquivalent: "")
     let screenWifi = NSMenuItem(title: "Use Boox as screen over Wi-Fi", action: #selector(screenWifiMode), keyEquivalent: "")
     let laptop = NSMenuItem(title: "Use laptop", action: #selector(laptopMode), keyEquivalent: "")
+    let colorMain = NSMenuItem(title: "Color screen main, Boox extended", action: #selector(colorMainLayout), keyEquivalent: "")
+    let booxMain = NSMenuItem(title: "Boox main, color screens extended", action: #selector(booxMainLayout), keyEquivalent: "")
+    let mirror = NSMenuItem(title: "Mirror: same desktop on both", action: #selector(mirrorLayout), keyEquivalent: "")
     let controlUSB = NSMenuItem(title: "Control Boox with keyboard & trackpad", action: #selector(controlUSBMode), keyEquivalent: "")
     let controlWifi = NSMenuItem(title: "Control Boox over Wi-Fi", action: #selector(controlWifiMode), keyEquivalent: "")
     let stop = NSMenuItem(title: "Stop controlling Boox", action: #selector(stopControl), keyEquivalent: "")
@@ -37,14 +40,16 @@ final class Menu: NSObject, NSMenuDelegate {
         super.init()
         item.button?.image = NSImage(systemSymbolName: "rectangle.portrait.on.rectangle.portrait", accessibilityDescription: "Boox")
         status.isEnabled = false
-        for i in [auto, screenUSB, screenWifi, laptop, controlUSB, controlWifi, stop] { i.target = self }
-        for i in [status, .separator(), screenUSB, screenWifi, laptop, .separator(),
-                  controlUSB, controlWifi, stop, .separator(), auto] { menu.addItem(i) }
+        for i in [auto, screenUSB, screenWifi, laptop, colorMain, booxMain, mirror, controlUSB, controlWifi, stop] { i.target = self }
+        for i in [status, .separator(), screenUSB, screenWifi, laptop, .separator(), colorMain, booxMain, mirror,
+                  .separator(), controlUSB, controlWifi, stop, .separator(), auto] { menu.addItem(i) }
         menu.autoenablesItems = false
         menu.delegate = self
         item.menu = menu
         refresh()
     }
+
+    var layoutLink = "usb"  // the link the layout items use: the current one, else USB
 
     func refresh() {
         let devices = run(adb, ["devices", "-l"], wait: true).output.split(separator: "\n")
@@ -55,6 +60,8 @@ final class Menu: NSObject, NSMenuDelegate {
         let mode = (try? String(contentsOfFile: state + "/mode", encoding: .utf8))?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? "laptop"
         let autoOn = !FileManager.default.fileExists(atPath: state + "/auto-off")
+        let layout = mode.hasPrefix("screen-") ? (try? String(contentsOfFile: state + "/layout", encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "" : ""
 
         let link = usb && wifi ? "USB and Wi-Fi" : usb ? "USB" : wifi ? "Wi-Fi" : nil
         status.title = link.map { "Boox connected (\($0))" } ?? "Boox not found"
@@ -63,8 +70,13 @@ final class Menu: NSObject, NSMenuDelegate {
         controlUSB.isHidden = !usb || controlling
         controlWifi.isHidden = !wifi || controlling
         stop.isHidden = !controlling
+        for i in [colorMain, booxMain, mirror] { i.isHidden = link == nil }
+        layoutLink = mode == "screen-wifi" || !usb ? "wifi" : "usb"
         screenUSB.state = mode == "screen-usb" ? .on : .off
         screenWifi.state = mode == "screen-wifi" ? .on : .off
+        colorMain.state = layout == "color" ? .on : .off
+        booxMain.state = layout == "boox" ? .on : .off
+        mirror.state = layout == "mirror" ? .on : .off
         laptop.state = mode == "laptop" ? .on : .off
         auto.state = autoOn ? .on : .off
         item.button?.appearsDisabled = link == nil
@@ -78,6 +90,10 @@ final class Menu: NSObject, NSMenuDelegate {
     @objc func screenUSBMode() { run(bin + "/boox-screen") }
     @objc func screenWifiMode() { run(bin + "/boox-screen", ["--wifi"]) }
     @objc func laptopMode() { run(bin + "/boox-laptop") }
+    func layout(_ name: String) { run(bin + "/boox-screen", layoutLink == "wifi" ? ["--wifi", name] : [name]) }
+    @objc func colorMainLayout() { layout("color") }
+    @objc func booxMainLayout() { layout("boox") }
+    @objc func mirrorLayout() { layout("mirror") }
     @objc func controlUSBMode() { run(bin + "/boox-control") }
     @objc func controlWifiMode() { run(bin + "/boox-control", ["--wifi"]) }
     @objc func stopControl() { run("/usr/bin/pkill", ["-9", "-x", "scrcpy"]) }  // scrcpy ignores TERM/INT on macOS

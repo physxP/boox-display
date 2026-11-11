@@ -41,7 +41,7 @@ while true; do
         $BIN/boox-screen >>$LOG 2>&1
       fi
     elif [[ $(mode) == screen-usb ]] && ! vnc_forward_on usb; then
-      ANDROID_SERIAL=$(usb_serial) $ADB reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null 2>&1  # adb restarted
+      p=$(vnc_port); ANDROID_SERIAL=$(usb_serial) $ADB reverse tcp:$p tcp:$p >/dev/null 2>&1  # adb restarted
     fi
   else
     if [[ $usb == yes ]]; then

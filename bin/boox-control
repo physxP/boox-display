@@ -41,8 +41,8 @@ kill $MW 2>/dev/null
 rm -f $STATE/control-active
 [[ -e $STATE/switching ]] && exit 0  # another mode is taking over; leave it alone
 case $prev in
-  screen-usb)  usb_connected  && exec $BIN/boox-screen >/dev/null ;;
-  screen-wifi) wifi_connected && exec $BIN/boox-screen --wifi >/dev/null ;;
+  screen-usb)  usb_connected  && exec $BIN/boox-screen $(layout) >/dev/null ;;
+  screen-wifi) wifi_connected && exec $BIN/boox-screen --wifi $(layout) >/dev/null ;;
 esac
 restore_laptop_brightness
 set_mode laptop

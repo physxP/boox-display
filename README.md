@@ -11,14 +11,27 @@ Built for one setup and shared as-is: a **Boox Note Max** and an **Apple Silicon
 
 | Mode | Command | What happens |
 |---|---|---|
-| Boox screen | `boox-screen [--wifi]` | A 1600×1200 HiDPI desktop (exactly 3200×2400 pixels, 1:1 with the panel) is mirrored to the laptop and shown on the Boox via VNC over USB (or Wi-Fi). Laptop backlight off. |
+| Boox screen | `boox-screen [--wifi] [color\|boox\|mirror]` | A 1600×1200 HiDPI desktop (exactly 3200×2400 pixels, 1:1 with the panel) is shown on the Boox via VNC over USB (or Wi-Fi), in one of three [layouts](#layouts). |
 | Laptop | `boox-laptop` | Laptop screen only, at its own resolution and brightness. VNC session ended. |
 | Control | `boox-control [--wifi]` | Mac keyboard and trackpad appear on the Boox as a real keyboard and mouse (scrcpy, no streaming). Laptop dark. **Right ⌘** ends it and returns to the previous mode. |
 
-Plugging the Boox in switches to Boox screen mode; unplugging switches to laptop mode.
-`boox-auto off` turns that off (plugging in then just charges / exposes files); `boox-auto on`
-turns it back on. All of this is also in the menu bar item, which shows whether the Boox is
-connected over USB, Wi-Fi or both, with separate USB and Wi-Fi items for each mode.
+Plugging the Boox in switches to Boox screen mode in the default layout (`color`, set by
+`DEFAULT_LAYOUT` in `bin/lib.sh`); unplugging switches to laptop mode. `boox-auto off` turns that off (plugging in then just charges / exposes files);
+`boox-auto on` turns it back on. All of this is also in the menu bar item, which shows whether
+the Boox is connected over USB, Wi-Fi or both, with separate USB and Wi-Fi items for each mode.
+
+### Layouts
+
+| Layout | Menu item | What happens |
+|---|---|---|
+| `color` (default) | Color screen main, Boox extended | The color screen that was main before (an external one if connected, else the laptop) stays main; the Boox extends it. |
+| `boox` | Boox main, color screens extended | The Boox is the main screen (menu bar, Dock); the laptop and any external screen extend it, lit. |
+| `mirror` | Mirror: same desktop on both | The laptop mirrors the Boox desktop with its backlight off; brightness keys bring it back. |
+
+The extended layouts are for moving windows between e-ink and color. *Use Boox as screen*
+starts the default layout; picking a layout while the Boox isn't a screen yet starts Boox
+screen mode over USB (else Wi-Fi). Control mode returns to the layout it left. Laptop mode
+makes the previous main screen main again.
 
 ## Wi-Fi
 
@@ -35,12 +48,20 @@ Both modes also work over Android wireless debugging, with no cable:
 
 ## How it works
 
-- **Display:** a BetterDisplay virtual screen is the main display; the built-in display mirrors
-  it, so unplugging never leaves you without a screen (brightness keys bring the laptop back).
-- **Transport:** macOS Screen Sharing (VNC) → `adb reverse tcp:5900` → [AVNC] on the Boox.
-  Lossless and pixel-exact, so text stays sharp.
+- **Display:** a BetterDisplay virtual screen is the Boox. In the mirror layout it is the main
+  display and the built-in display mirrors it, so unplugging never leaves you without a screen
+  (brightness keys bring the laptop back). The other layouts turn mirroring off and pick the
+  main display.
+- **Transport, one desktop** (mirror, no external screen): macOS Screen Sharing (VNC) →
+  `adb reverse tcp:5900` → [AVNC] on the Boox. Lossless and pixel-exact, so text stays sharp.
+- **Transport, several desktops** (extended layouts, or an external screen attached): Screen
+  Sharing would send every display as one wide image, so `booxvnc` serves the Boox display
+  alone: ScreenCaptureKit at the panel's pixel size → libvncserver on `127.0.0.1:5901` →
+  `adb reverse tcp:5901` → AVNC, opened with a `vnc://` link. View-only (use the Mac's keyboard
+  and trackpad), lossless (JPEG is switched off), and only changed rows are sent. launchd starts
+  it (`local.boox-display.vnc`) so its Screen Recording permission belongs to `booxvnc`.
 - **Cursor:** macOS VNC sends the cursor's shape but not its position, so `vnccursor` draws one
-  into the screen image while Boox screen mode is on.
+  into the screen image while the Boox is connected (`booxvnc` captures that cursor too).
 - **Control mode:** `scrcpy --no-video --keyboard=uhid --mouse=uhid`, wrapped in
   `Boox Control.app` so macOS gives it focus. While scrcpy holds the mouse the Mac pointer is
   frozen; `mousewatch` treats the pointer moving again (right ⌘) as "stop".
@@ -50,14 +71,15 @@ Both modes also work over Android wireless debugging, with no cable:
 - **Links:** USB and Wi-Fi can both be connected; every adb/scrcpy call targets one through
   `ANDROID_SERIAL`.
 
-State lives in `~/.local/state/boox-display`: current `mode`, the `auto-off` flag, the Boox's
-`boox-serial` and last `boox-wifi` address, `control-serial` and `control-active` for control
-mode, `laptop-brightness`, `editor-zoom.json`, and the watcher's `watch.log`. It is
-machine-local and never committed.
+State lives in `~/.local/state/boox-display`: current `mode` and `layout`, the `auto-off`
+flag, the Boox's `boox-serial` and last `boox-wifi` address, `control-serial` and
+`control-active` for control mode, `laptop-brightness`, `color-main` (the main screen before
+the Boox took over), `editor-zoom.json`, `booxvnc`'s random `vnc-password` and `booxvnc.log`,
+and the watcher's `watch.log`. It is machine-local and never committed.
 
 ## Setup
 
-1. `brew install --cask betterdisplay` and `brew install scrcpy`; Android platform-tools at
+1. `brew install --cask betterdisplay` and `brew install scrcpy libvncserver`; Android platform-tools at
    `~/Library/Android/sdk/platform-tools/adb` (Android Studio's default). The login items, the
    menu and `Boox Control.app` only look there; `ADB=/path/to/adb` works only for commands you
    run from a shell. Xcode Command Line Tools for `swiftc` (`xcode-select --install`).
@@ -67,9 +89,13 @@ machine-local and never committed.
    *Auto-connect when app starts* and image quality at max, and log in once with *Remember*
    (this stores your Mac login password in AVNC on the tablet).
 4. `./install.sh` (builds the Swift helpers into `build/`, installs `~/Applications/Boox Control.app`,
-   links the commands into `/opt/homebrew/bin`, and loads the three LaunchAgents rendered from
+   links the commands into `/opt/homebrew/bin`, and loads the LaunchAgents rendered from
    `launchd/`). `./uninstall.sh` reverses it; BetterDisplay, the virtual screen and the state
    directory are left alone.
+5. The first plug-in (or any extended layout) asks for **Screen Recording** permission for
+   `booxvnc`: allow it in System Settings → Privacy & Security → Screen & System Audio
+   Recording, then pick a layout from the menu. `booxvnc` is ad-hoc signed, so after a change to `src/booxvnc.swift` the rebuilt
+   binary has to be allowed again.
 
 Keep the clone where it is: the login items run from it (and restart if they exit), so run
 `./uninstall.sh` before moving or deleting it.
@@ -90,6 +116,11 @@ Keep the clone where it is: the login items run from it (and restart if they exi
   tablet's adb tunnel. Allow only your own account, don't enable "VNC viewers may control
   screen with password", keep the macOS firewall on, and turn Screen Sharing off when you stop
   using this (`uninstall.sh` leaves it on).
+- **booxvnc has Screen Recording permission** and, while an extended layout is on, serves the
+  Boox display on `127.0.0.1:5901` only (no other interface, no IPv6). It is view-only and asks
+  for a random 8-character password (`vnc-password`, readable only by you). Classic VNC
+  passwords are weak, so this protects against other local programs and Boox apps, not a
+  determined attacker on the Mac. The password is handed to AVNC on an `am start` command line.
 - **Wireless debugging on the Boox is switched on at every USB plug-in and never switched off**,
   and `stay_on_while_plugged_in` is set. While it is on, the tablet advertises itself (with its
   serial number) on the local network and accepts adb from computers it has trusted. To stop:
@@ -99,7 +130,7 @@ Keep the clone where it is: the login items run from it (and restart if they exi
   it disconnects offline adb devices, which can include your other phones or emulators.
 - **Other scrcpy windows:** any process named `scrcpy` counts as control mode and is killed
   (`kill -9`) on mode switches, including scrcpy sessions for other devices.
-- **Editor settings:** Boox screen mode sets `window.zoomLevel` in VS Code's and Antigravity's
+- **Editor settings:** Boox screen mode (mirror and `boox` layouts) sets `window.zoomLevel` in VS Code's and Antigravity's
   `settings.json` and restores it in laptop mode. The file is rewritten (reformatted), files with
   comments are skipped, and Settings Sync may carry the zoom to your other machines.
 - `install.sh` puts the four commands into `/opt/homebrew/bin`, replacing anything with the same
@@ -122,6 +153,12 @@ Keep the clone where it is: the login items run from it (and restart if they exi
 - A freshly connected BetterDisplay virtual screen ignores settings for a moment; poll its mode
   list before setting the resolution.
 - Laptop brightness fades in, so wait for it to settle before saving it.
+- macOS Screen Sharing sends all displays as one wide image to non-Apple viewers, so an
+  extended desktop needs its own single-display server (`booxvnc`).
+- ScreenCaptureKit's `SCDisplay.width` is in points; capturing at that size halves the Boox's
+  resolution. `booxvnc` uses the display mode's pixel size.
+- libvncserver also listens on IPv6 on every interface unless `ipv6port` is 0, and its Tight
+  encoder JPEG-compresses anti-aliased text whenever the viewer asks for a quality level.
 - Homebrew upgrades of BetterDisplay quit it and don't restart it, so plugging in did nothing
   until it was started by hand; mode switches now start it themselves. `betterdisplaycli` runs
   the BetterDisplay binary too, so a plain `pgrep BetterDisplay` can't tell whether the app is up.

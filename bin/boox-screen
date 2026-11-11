@@ -1,14 +1,27 @@
 #!/bin/zsh
-# Boox screen mode: the Mac desktop (1600x1200 HiDPI, mirrored to the laptop) is shown on
-# the Boox through VNC, tunnelled over adb (USB, or Wi-Fi with --wifi), and the laptop
-# backlight goes off.
+# Boox screen mode: the Mac desktop (1600x1200 HiDPI, 1:1 with the Boox panel) is shown on the
+# Boox through VNC, tunnelled over adb (USB, or Wi-Fi with --wifi). Layouts (default:
+# DEFAULT_LAYOUT in lib.sh):
+#   color   the color screen that was main stays main (external, else laptop); the Boox extends it
+#   boox    the Boox is the main screen; the laptop (and any external screen) extend it, lit
+#   mirror  the laptop shows the same desktop, its backlight off
+# With a single desktop the Boox gets macOS Screen Sharing. With several (extended layouts, or
+# an external screen attached) it gets booxvnc, because Screen Sharing would send them all.
 source ${0:A:h}/lib.sh
 wait_unlocked
-link=usb; [[ $1 == --wifi ]] && link=wifi
+link=usb layout=$DEFAULT_LAYOUT
+for a; do
+  case $a in
+    --wifi) link=wifi ;;
+    mirror|boox|color) layout=$a ;;
+    *) echo "Usage: boox-screen [--wifi] [color|boox|mirror]"; exit 2 ;;
+  esac
+done
 use_link $link || { echo "Boox not connected over ${link:u}."; exit 1; }
 stop_control
 start_betterdisplay || exit 1
 
+[[ $(mode) == laptop ]] && save_color_main
 BOOX=$(boox_tag) LAPTOP=$(laptop_tag)
 [[ $(betterdisplaycli get --tagID=$BOOX --connected) == on ]] || betterdisplaycli set --tagID=$BOOX --connected=on
 # A freshly connected virtual screen takes a moment to accept settings; wait for it.
@@ -19,19 +32,39 @@ for i in {1..30}; do
 done
 [[ -n $MODE ]] || { echo "The $VIRTUAL_NAME display didn't come up."; exit 1; }
 betterdisplaycli set --tagID=$BOOX --displayModeNumber=$MODE
-betterdisplaycli set --tagID=$BOOX --main=on
-betterdisplaycli set --tagID=$BOOX --mirror=on --targetTagID=$LAPTOP >/dev/null
 
-save_laptop_brightness
-betterdisplaycli set --tagID=$LAPTOP --softwareBrightness=1
-betterdisplaycli set --tagID=$LAPTOP --hardwareBrightness=0
-$BIN/editor-zoom on
+if [[ $layout == mirror ]]; then
+  betterdisplaycli set --tagID=$BOOX --main=on
+  betterdisplaycli set --tagID=$BOOX --mirror=on --targetTagID=$LAPTOP >/dev/null
+  save_laptop_brightness
+  betterdisplaycli set --tagID=$LAPTOP --softwareBrightness=1
+  betterdisplaycli set --tagID=$LAPTOP --hardwareBrightness=0
+else
+  betterdisplaycli set --tagID=$BOOX --mirror=off --targetTagID=$LAPTOP >/dev/null 2>&1
+  [[ $layout == boox ]] && main=$BOOX || main=$(color_main)
+  betterdisplaycli set --tagID=$main --main=on
+  restore_laptop_brightness
+fi
+if [[ $layout == color ]]; then $BIN/editor-zoom off; else $BIN/editor-zoom on; fi
 
 # The Boox has one VNC port forward, carried by whichever link created it; recreate it on
-# this link.
+# this link, for the server this layout needs.
 wake_boox
 $ADB reverse --remove tcp:$VNC_PORT >/dev/null 2>&1
-$ADB reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null
-start_avnc
+$ADB reverse --remove tcp:$BOOXVNC_PORT >/dev/null 2>&1
+if [[ $layout == mirror ]] && ! external_connected; then
+  stop_booxvnc
+  $ADB reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null
+  start_avnc
+else
+  start_booxvnc || exit 1
+  $ADB reverse tcp:$BOOXVNC_PORT tcp:$BOOXVNC_PORT >/dev/null
+  start_avnc booxvnc
+fi
+echo $layout > $STATE/layout
 set_mode screen-$link
-echo "Boox screen mode (${link:u}). Brightness keys bring the laptop back (same desktop); boox-laptop to undo."
+case $layout in
+  mirror) echo "Boox screen mode (${link:u}). Brightness keys bring the laptop back (same desktop); boox-laptop to undo." ;;
+  boox)   echo "Boox screen mode (${link:u}), Boox main; the color screens extend it. boox-laptop to undo." ;;
+  color)  echo "Boox screen mode (${link:u}), color screen main; the Boox extends it. boox-laptop to undo." ;;
+esac
