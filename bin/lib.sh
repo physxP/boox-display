@@ -84,6 +84,18 @@ vnc_forward_on() {
 vnc_client_connected() { netstat -an -p tcp 2>/dev/null | grep -q "127.0.0.1.$VNC_PORT .*ESTABLISHED" }
 
 # --- Displays ------------------------------------------------------------------------
+# BetterDisplay must be running for any display change, and Homebrew upgrades quit it without
+# restarting it, so start it if needed and wait until it answers. `betterdisplaycli` runs the
+# same binary with arguments, so only the bare app process counts as running.
+start_betterdisplay() {
+  pgrep -fxq '.*/BetterDisplay\.app/Contents/MacOS/BetterDisplay' || open -ga BetterDisplay
+  local end=$(( SECONDS + 30 ))
+  until [[ $(betterdisplaycli get --identifiers 2>/dev/null) == *tagID* ]]; do
+    (( SECONDS < end )) || { echo "BetterDisplay isn't responding."; return 1 }
+    sleep 0.5
+  done
+}
+
 # BetterDisplay tagIDs, looked up by name so they survive re-creating the virtual screen.
 tag_of() {
   betterdisplaycli get --identifiers 2>/dev/null | python3 -c '

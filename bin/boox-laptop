@@ -3,6 +3,7 @@
 source ${0:A:h}/lib.sh
 wait_unlocked
 stop_control
+start_betterdisplay || exit 1
 
 BOOX=$(boox_tag) LAPTOP=$(laptop_tag)
 restore_laptop_brightness

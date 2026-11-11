@@ -44,9 +44,9 @@ Both modes also work over Android wireless debugging, with no cable:
 - **Control mode:** `scrcpy --no-video --keyboard=uhid --mouse=uhid`, wrapped in
   `Boox Control.app` so macOS gives it focus. While scrcpy holds the mouse the Mac pointer is
   frozen; `mousewatch` treats the pointer moving again (right ⌘) as "stop".
-- **Watcher:** `boox-watch` (login item) reacts to plug/unplug, waits for BetterDisplay after
-  login, honours auto-off and control mode, and waits for the Mac to be unlocked before
-  switching (BetterDisplay can't change displays on the lock screen).
+- **Watcher:** `boox-watch` (login item) reacts to plug/unplug, honours auto-off and control
+  mode, and waits for the Mac to be unlocked before switching (BetterDisplay can't change
+  displays on the lock screen).
 - **Links:** USB and Wi-Fi can both be connected; every adb/scrcpy call targets one through
   `ANDROID_SERIAL`.
 
@@ -82,7 +82,7 @@ Keep the clone where it is: the login items run from it (and restart if they exi
   another Boox nothing happens until you edit those.
 - **MacBook:** brightness handling expects a display called "Built-in Display".
 - **Apple Silicon Homebrew** (`/opt/homebrew`); on an Intel Mac `install.sh` stops partway.
-- BetterDisplay must be running for any mode switch.
+- BetterDisplay must be installed; every mode switch starts it if it isn't running.
 
 ## Security and side effects
 
@@ -122,6 +122,9 @@ Keep the clone where it is: the login items run from it (and restart if they exi
 - A freshly connected BetterDisplay virtual screen ignores settings for a moment; poll its mode
   list before setting the resolution.
 - Laptop brightness fades in, so wait for it to settle before saving it.
+- Homebrew upgrades of BetterDisplay quit it and don't restart it, so plugging in did nothing
+  until it was started by hand; mode switches now start it themselves. `betterdisplaycli` runs
+  the BetterDisplay binary too, so a plain `pgrep BetterDisplay` can't tell whether the app is up.
 - Wireless debugging listens on a random port; it is found among the Boox's listening ports.
 - The `adb reverse` VNC forward is device-wide and tied to the link that created it, so it is
   recreated on the chosen link at every mode switch.
